@@ -94,3 +94,15 @@ WITH (
   autovacuum_vacuum_threshold=5000,
   autovacuum_analyze_threshold=5000
 );
+
+DROP TABLE IF EXISTS session;
+CREATE TABLE session
+(
+  sid character varying NOT NULL,
+  sess json NOT NULL,
+  expire timestamp(6) without time zone NOT NULL,
+  CONSTRAINT session_pkey PRIMARY KEY (sid)
+)
+WITH (
+  OIDS=FALSE
+);
