@@ -16,7 +16,6 @@ from sm.engine.dataset_reader import DatasetReader
 from sm.engine.db import DB
 from sm.engine.fdr import FDR
 from sm.engine.search_results import SearchResults
-from sm.engine.theor_peaks_gen import TheorPeaksGenerator
 from sm.engine.util import proj_root, SMConfig, read_json, sm_log_formatters
 from sm.engine.work_dir import WorkDirManager, local_path
 from sm.engine.es_export import ESExporter
@@ -30,7 +29,6 @@ logger = logging.getLogger('sm-engine')
 JOB_ID_MOLDB_ID_SEL = "SELECT id, db_id FROM job WHERE ds_id = %s"
 JOB_INS = "INSERT INTO job (db_id, ds_id, status, start) VALUES (%s, %s, %s, %s) RETURNING id"
 JOB_UPD = "UPDATE job set status=%s, finish=%s where id=%s"
-TARGET_DECOY_ADD_DEL = 'DELETE FROM target_decoy_add tda WHERE tda.job_id IN (SELECT id FROM job WHERE ds_id = %s)'
 
 
 class SearchJob(object):
@@ -83,10 +81,6 @@ class SearchJob(object):
         rows = [(mol_db_id, self._ds.id, 'STARTED', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))]
         self._job_id = self._db.insert_return(JOB_INS, rows)[0]
 
-    # TODO: stop storing target-decoy adduct combinations in the database
-    def clean_target_decoy_table(self):
-        self._db.alter(TARGET_DECOY_ADD_DEL, self._ds.id)
-
     def _run_job(self, mol_db):
         try:
             self.store_job_meta(mol_db.id)
@@ -95,13 +89,8 @@ class SearchJob(object):
             logger.info("Processing ds_id: %s, ds_name: %s, db_name: %s, db_version: %s ...",
                         self._ds.id, self._ds.name, mol_db.name, mol_db.version)
 
-            theor_peaks_gen = TheorPeaksGenerator(self._sc, mol_db, self._ds.config)
-            theor_peaks_gen.run()
-
             target_adducts = self._ds.config['isotope_generation']['adducts']
-            self._fdr = FDR(self._job_id, mol_db,
-                            decoy_sample_size=20, target_adducts=target_adducts, db=self._db)
-            self._fdr.decoy_adduct_selection()
+            self._fdr = FDR(mol_db.sf_df, target_adducts)
 
             search_alg = MSMBasicSearch(self._sc, self._ds, self._ds_reader, mol_db, self._fdr, self._ds.config)
             ion_metrics_df, ion_iso_images = search_alg.search()
@@ -185,7 +174,6 @@ class SearchJob(object):
             if self._sc:
                 self._sc.stop()
             if self._db:
-                self.clean_target_decoy_table()
                 self._db.close()
             if self._wd_manager and not self.no_clean:
                 self._wd_manager.clean()

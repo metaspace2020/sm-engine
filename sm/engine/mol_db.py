@@ -2,32 +2,17 @@ from collections import OrderedDict
 import pandas as pd
 import logging
 import requests
+import pyarrow.ipc
 
 from sm.engine.db import DB
 from sm.engine.util import SMConfig
+from sm.engine.fdr import DECOY_ADDUCTS, create_fdr_subsample
 
 logger = logging.getLogger('sm-engine')
 
 SF_INS = 'INSERT INTO sum_formula (db_id, sf) values (%s, %s)'
 SF_COUNT = 'SELECT count(*) FROM sum_formula WHERE db_id = %s'
 SF_SELECT = 'SELECT id, sf FROM sum_formula WHERE db_id = %s'
-THEOR_PEAKS_TARGET_ADD_SEL = (
-    'SELECT sf.id, adduct, centr_mzs, centr_ints '
-    'FROM theor_peaks p '
-    'JOIN sum_formula sf ON sf.sf = p.sf AND sf.db_id = %s '
-    'WHERE adduct = ANY(%s) AND ROUND(sigma::numeric, 6) = %s AND pts_per_mz = %s '
-    'AND charge = %s '
-    'ORDER BY sf.id, adduct')
-
-THEOR_PEAKS_DECOY_ADD_SEL = (
-    'SELECT DISTINCT sf.id, decoy_add as adduct, centr_mzs, centr_ints '
-    'FROM theor_peaks p '
-    'JOIN sum_formula sf ON sf.sf = p.sf AND sf.db_id = %s '
-    'JOIN target_decoy_add td on td.job_id = %s '
-    'AND td.db_id = sf.db_id AND td.sf_id = sf.id AND td.decoy_add = p.adduct '
-    'WHERE ROUND(sigma::numeric, 6) = %s AND pts_per_mz = %s AND charge = %s '
-    'ORDER BY sf.id, adduct')
-
 
 class MolDBServiceWrapper(object):
     def __init__(self, service_url):
@@ -60,6 +45,19 @@ class MolDBServiceWrapper(object):
             # TODO: replace one large request with several smaller ones
             url = '{}/databases/{}/molecules?fields=sf,mol_id,mol_name&limit=10000000'
             return self._fetch(url.format(self._service_url, db_id))
+
+    def fetch_patterns(self, db_id, charge, adducts, pts_per_mz):
+        url = '{}/isotopic_patterns/{}/{}/{}'.format(self._service_url, db_id, charge, pts_per_mz)
+        r = self._session.post(url, data={'adducts': ','.join(adducts)})
+        r.raise_for_status()
+        df = pyarrow.ipc.deserialize_pandas(r.content)
+        df.rename(columns={
+            'sf_id': 'mf',
+            'adduct': 'adduct',
+            'mzs': 'mzs',
+            'intensities': 'centr_ints'
+        }, inplace=True)
+        return df
 
 
 class MolecularDB(object):
@@ -141,37 +139,39 @@ class MolecularDB(object):
     @property
     def sf_df(self):
         if self._sf_df is None:
+            sfs = pd.DataFrame.from_records(list(self.sfs.items()), columns=['sf_id', 'mf'])
             iso_gen_conf = self._iso_gen_config
             charge = '{}{}'.format(iso_gen_conf['charge']['polarity'], iso_gen_conf['charge']['n_charges'])
-            target_sf_peaks_rs = self._db.select(THEOR_PEAKS_TARGET_ADD_SEL, self._id,
-                                                 iso_gen_conf['adducts'], iso_gen_conf['isocalc_sigma'],
-                                                 iso_gen_conf['isocalc_pts_per_mz'], charge)
-            assert target_sf_peaks_rs, 'No formulas matching the criteria were found in theor_peaks! (target)'
 
-            decoy_sf_peaks_rs = self._db.select(THEOR_PEAKS_DECOY_ADD_SEL, self._id, self._job_id,
-                                                iso_gen_conf['isocalc_sigma'], iso_gen_conf['isocalc_pts_per_mz'],
-                                                charge)
-            assert decoy_sf_peaks_rs, 'No formulas matching the criteria were found in theor_peaks! (decoy)'
-
-            sf_peak_rs = target_sf_peaks_rs + decoy_sf_peaks_rs
-            self._sf_df = (pd.DataFrame(sf_peak_rs, columns=['sf_id', 'adduct', 'centr_mzs', 'centr_ints'])
-                           .sort_values(['sf_id', 'adduct']))
+            target_adducts = iso_gen_conf['adducts']
+            full_df = self.mol_db_service.fetch_patterns(self.id, charge,
+                                                         target_adducts + DECOY_ADDUCTS,
+                                                         iso_gen_conf['isocalc_pts_per_mz'])
+            self._sf_df = create_fdr_subsample(full_df, target_adducts, DECOY_ADDUCTS)
             self._check_formula_uniqueness(self._sf_df)
+
+            self._sf_df = pd.merge(self._sf_df, sfs)
+            del self._sf_df['mf']
+
+            has_target_entries = self._sf_df['is_target'].sum() > 0
+            has_decoy_entries = (~self._sf_df['is_target']).sum() > 0
+            assert has_target_entries, 'No formulas matching the criteria were found in theor_peaks! (target)'
+            assert has_decoy_entries, 'No formulas matching the criteria were found in theor_peaks! (decoy)'
 
             logger.info('Loaded %s sum formula, adduct combinations from the DB', self._sf_df.shape[0])
         return self._sf_df
 
     @staticmethod
     def _check_formula_uniqueness(sf_df):
-        uniq_sf_adducts = len({(r.sf_id, r.adduct) for r in sf_df.itertuples()})
+        uniq_sf_adducts = len({(r.mf, r.adduct) for r in sf_df.itertuples()})
         assert uniq_sf_adducts == sf_df.shape[0], \
             'Not unique formula-adduct combinations {} != {}'.format(uniq_sf_adducts, sf_df.shape[0])
 
     @staticmethod
     def sf_peak_gen(sf_df):
-        for sf_id, adduct, mzs, _ in sf_df.values:
-            for pi, mz in enumerate(mzs):
-                yield sf_id, adduct, pi, mz
+        for r in sf_df.itertuples():
+            for pi, mz in enumerate(r.mzs):
+                yield r.sf_id, r.adduct, pi, mz
 
     def get_ion_peak_df(self):
         return pd.DataFrame(self.sf_peak_gen(self.sf_df),

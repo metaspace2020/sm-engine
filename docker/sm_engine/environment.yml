@@ -7,6 +7,7 @@ dependencies:
   - numpy=1.11
   - scipy=0.17
   - pandas=0.19.2
+  - pyarrow=0.6.0
   - cffi
   - cryptography
   - lxml
@@ -27,6 +28,7 @@ dependencies:
     - elasticsearch
     - elasticsearch_dsl
     - pika>=0.11.0b1
+    - pysparkling
     - coverage
     - coveralls
     - pypng

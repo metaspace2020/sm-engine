@@ -34,5 +34,10 @@ COPY environment.yml /root/environment.yml
 RUN conda install -y nomkl && conda env create && conda clean -y --all
 
 # install environment for MolecularDB
-RUN git clone https://github.com/metaspace2020/sm-molecular-db -b rel-v0.7 && \
+RUN git clone https://github.com/metaspace2020/sm-molecular-db -b isotope-storage && \
     cd sm-molecular-db && conda env create && conda clean -y --all
+
+COPY mol_db_conf.ini /root/sm-molecular-db/conf/local.ini
+RUN cd /tmp/ &&\
+    wget -q https://s3-eu-west-1.amazonaws.com/embl-sm-testing/dumps/2017-08-29/hmdb-2016-8078-pos-0.3.5.tar.bz2 &&\
+    tar xjf hmdb-2016-8078-pos-0.3.5.tar.bz2 && rm hmdb-2016-8078-pos-0.3.5.tar.bz2

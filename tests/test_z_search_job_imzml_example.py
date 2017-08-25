@@ -5,6 +5,7 @@ from fabric.context_managers import warn_only
 from unittest.mock import patch, MagicMock
 import time
 from datetime import datetime
+import pandas as pd
 
 from sm.engine.db import DB
 from sm.engine.errors import JobFailedError
@@ -34,6 +35,12 @@ def init_mol_db_service_wrapper_mock(MolDBServiceWrapperMock):
     mol_db_wrapper_mock.fetch_db_sfs.return_value = ['C12H24O']
     mol_db_wrapper_mock.fetch_molecules.return_value = [{'sf': 'C12H24O', 'mol_id': 'HMDB0001',
                                                          'mol_name': 'molecule name'}]
+    mol_db_wrapper_mock.fetch_patterns.return_value = pd.DataFrame({
+        'mf': ['C12H24O'] * 28,
+        'adduct': ['+H', '+K', '+Na'] + DECOY_ADDUCTS[:25],
+        'mzs': [[100, 101, 102]] * 3 + [[120, 121, 122]] * 25,
+        'centr_ints': [[100, 10, 1]] * 28
+    })
 
 
 @patch('sm.engine.search_job.MolDBServiceWrapper')
@@ -87,25 +94,16 @@ def test_search_job_imzml_example(get_compute_img_metrics_mock, filter_sf_metric
         assert (db_id, ds_id, status) == (0, '2000-01-01_00h00m', 'FINISHED')
         assert start < finish
 
-        # theoretical patterns asserts
-        rows = db.select('SELECT sf, adduct, centr_mzs, centr_ints '
-                         'FROM theor_peaks '
-                         'ORDER BY adduct')
-
-        assert len(rows) == 3 + len(DECOY_ADDUCTS)
-        for r in rows:
-            assert r[2] and r[3]
-
         # image metrics asserts
         rows = db.select(('SELECT db_id, sf_id, adduct, stats, iso_image_urls, ion_image_url '
                           'FROM iso_image_metrics '
                           'ORDER BY sf_id, adduct'))
 
-        assert rows[0] == (0, 1, '+K', {'chaos': 0.9, 'spatial': 0.9, 'spectral': 0.9,
+        assert rows[0] == (0, 1, '+H', {'chaos': 0.9, 'spatial': 0.9, 'spectral': 0.9,
                                         'total_iso_ints': [100.], 'min_iso_ints': [0], 'max_iso_ints': [10.]},
                            ['iso_image_1', None, None, None], None)
-        assert rows[1] == (0, 1, '+Na', {'chaos': 0.9, 'spatial': 0.9, 'spectral': 0.9,
-                                         'total_iso_ints': [100.], 'min_iso_ints': [0], 'max_iso_ints': [10.]},
+        assert rows[1] == (0, 1, '+K', {'chaos': 0.9, 'spatial': 0.9, 'spectral': 0.9,
+                                        'total_iso_ints': [100.], 'min_iso_ints': [0], 'max_iso_ints': [10.]},
                            ['iso_image_1', None, None, None], None)
 
         time.sleep(1)  # Waiting for ES

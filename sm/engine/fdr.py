@@ -11,39 +11,19 @@ DECOY_ADDUCTS = ['+He', '+Li', '+Be', '+B', '+C', '+N', '+O', '+F', '+Ne', '+Mg'
 
 class FDR(object):
 
-    def __init__(self, job_id, mol_db, decoy_sample_size, target_adducts, db):
-        self.job_id = job_id
-        self._mol_db = mol_db
-        self.decoy_sample_size = decoy_sample_size
-        self.db = db
+    def __init__(self, plan, target_adducts):
+        """
+        Plan is a Pandas dataframe (df) structured as
+        sf_id | adduct | ... | <target_adduct_1> | ... | <target_adduct_N> | is_target
+        such that df[df[target_adduct]] gives all (molecular formula, decoy adduct) combinations
+        for that particular target adduct, grouped by molecular formula
+        """
+        self._plan = plan
+        n_mf = len(plan['sf_id'].unique())
+        self.decoy_sample_size = plan[target_adducts[0]].sum() // n_mf
         self.target_adducts = target_adducts
         self.td_df = None
         self.fdr_levels = [0.05, 0.1, 0.2, 0.5]
-        self.random_seed = 42
-
-    def _decoy_adduct_gen(self, sf_ids, target_adducts, decoy_adducts_cand, decoy_sample_size):
-        np.random.seed(self.random_seed)
-        for sf_id in sf_ids:
-            for ta in target_adducts:
-                for da in np.random.choice(decoy_adducts_cand, size=decoy_sample_size, replace=False):
-                    yield (sf_id, ta, da)
-
-    def _save_target_decoy_df(self):
-        buf = StringIO()
-        df = self.td_df.copy()
-        df.insert(0, 'db_id', self._mol_db.id)
-        df.insert(0, 'job_id', self.job_id)
-        df.to_csv(buf, index=False, header=False)
-        buf.seek(0)
-        self.db.copy(buf, 'target_decoy_add', sep=',')
-
-    def decoy_adduct_selection(self):
-        sf_ids = self._mol_db.sfs.keys()
-        decoy_adduct_cand = list(set(DECOY_ADDUCTS) - set(self.target_adducts))
-        self.td_df = pd.DataFrame(self._decoy_adduct_gen(sf_ids, self.target_adducts,
-                                                         decoy_adduct_cand, self.decoy_sample_size),
-                                  columns=['sf_id', 'ta', 'da'])
-        self._save_target_decoy_df()
 
     @staticmethod
     def _msm_fdr_map(target_msm, decoy_msm):
@@ -73,8 +53,8 @@ class FDR(object):
             target_msm = msm_df.loc(axis=0)[:,ta]
 
             msm_fdr_list = []
+            full_decoy_df = self._plan[self._plan[ta]][['sf_id', 'adduct']]
             for i in range(self.decoy_sample_size):
-                full_decoy_df = self.td_df[self.td_df.ta == ta][['sf_id', 'da']]
                 decoy_subset_df = full_decoy_df[i::self.decoy_sample_size]
                 sf_da_list = [tuple(row) for row in decoy_subset_df.values]
                 decoy_msm = msm_df.loc[sf_da_list]
@@ -86,3 +66,33 @@ class FDR(object):
             target_fdr_df_list.append(target_fdr.drop('msm', axis=1))
 
         return pd.concat(target_fdr_df_list, axis=0)
+
+def create_fdr_subsample(df, target_adducts, decoy_adducts, decoys_per_target=20, random_seed=42):
+    if random_seed:
+        np.random.seed(random_seed)
+
+    df['is_target'] = df['adduct'].isin(target_adducts)
+    decoy_df, target_df = [x[1] for x in df.groupby('is_target')]  # False < True
+    n_decoy_adducts = len(decoy_df['adduct'].unique())
+    n_mf = int(len(decoy_df) / n_decoy_adducts)
+    assert decoys_per_target <= n_decoy_adducts
+
+    # assert n_mf == len(decoy_df['mf'].unique())  # slows things down, left here for debugging
+
+    # built-in np.random.choice is relatively slow for drawing samples without replacement,
+    # generating a list of M random floats and taking .argsort()[:N] is much faster, as it turns out
+    # http://numpy-discussion.10968.n7.nabble.com/Generating-random-samples-without-repeats-tp25666p25707.html
+    def _select_decoys(adduct):
+        selection = np.zeros_like(decoy_df['adduct'], dtype=bool)
+        for i in range(n_mf):
+            sub_selection = np.random.rand(n_decoy_adducts).argsort()[:decoys_per_target]
+            selection[i * n_decoy_adducts : (i+1) * n_decoy_adducts][sub_selection] = True
+        return selection
+
+    for adduct in target_adducts:
+        target_df[adduct] = False
+        decoy_df[adduct] = _select_decoys(adduct)
+
+    # keep only decoy isotope patterns selected at least for one target adduct
+    decoy_df = decoy_df[decoy_df[target_adducts].sum(axis=1) > 0]
+    return pd.concat([target_df, decoy_df])
