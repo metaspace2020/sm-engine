@@ -29,11 +29,11 @@ def test_index_ds_works(es_dsl_search, sm_index, sm_config):
             # "sf", "sf_adduct",
             # "chaos", "image_corr", "pattern_match", "total_iso_ints", "min_iso_ints", "max_iso_ints", "msm",
             # "adduct", "job_id", "sf_id", "fdr",
-            # "centroid_mzs", "iso_image_ids", "polarity"
+            # "iso_image_ids", "polarity"
             return [('H2O', 'H2O+H', 1, 1, 1, 100, 0, 100, 1, '+H', 1, 'sf_0', 0.1,
-                     [100, 200], ['iso_img_id_1', 'iso_img_id_2'], '+'),
+                     ['iso_img_id_1', 'iso_img_id_2'], '+'),
                     ('Au', 'Au+H', 1, 1, 1, 100, 0, 100, 1, '+H', 1, 'sf_1', 0.05,
-                     [100, 200], ['iso_img_id_1', 'iso_img_id_2'], '+')]
+                     ['iso_img_id_1', 'iso_img_id_2'], '+')]
         else:
             logger.error('Wrong db_sel_side_effect arguments: ', args)
 
@@ -46,6 +46,8 @@ def test_index_ds_works(es_dsl_search, sm_index, sm_config):
     mol_db_mock.version = '2017'
     mol_db_mock.get_molecules.return_value = pd.DataFrame([('H2O', 'mol_id', 'mol_name'), ('Au', 'mol_id', 'mol_name')],
                                                           columns=['sf', 'mol_id', 'mol_name'])
+    mol_db_mock.sf_df = pd.DataFrame([('sf_0', '+H', [100, 200]), ('sf_1', '+H', [100, 200])],
+                                     columns=['sf_id', 'adduct', 'mzs'])
     es_exp = ESExporter(db_mock)
     es_exp.index_ds(ds_id, mol_db_mock, del_first=True)
 
