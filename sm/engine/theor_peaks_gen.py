@@ -93,8 +93,11 @@ class TheorPeaksGenerator(object):
             return formatted_iso_peaks(sf, adduct)
 
         for i in range(0, len(sf_adduct_cand), n):
-            sf_adduct_cand_rdd = self._sc.parallelize(sf_adduct_cand[i:i + n], numSlices=128)
-            peak_lines = sf_adduct_cand_rdd.flatMap(format_peaks).collect()
+            if self._sc:  # use Spark if it's been setup
+                sf_adduct_cand_rdd = self._sc.parallelize(sf_adduct_cand[i:i + n], numSlices=128)
+                peak_lines = sf_adduct_cand_rdd.flatMap(format_peaks).collect()
+            else:
+                peak_lines = [list(format_peaks(cand))[0] for cand in sf_adduct_cand[i:i + n]]
             self._import_theor_peaks_to_db(peak_lines)
 
     def _import_theor_peaks_to_db(self, peak_lines):

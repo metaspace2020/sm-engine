@@ -85,6 +85,18 @@ class SearchJob(object):
     def clean_target_decoy_table(self):
         self._db.alter(TARGET_DECOY_ADD_DEL, self._ds.id)
 
+    def _search(self, mol_db):
+        theor_peaks_gen = TheorPeaksGenerator(self._sc, mol_db, self._ds.config, db=self._db)
+        theor_peaks_gen.run()
+
+        target_adducts = self._ds.config['isotope_generation']['adducts']
+        self._fdr = FDR(self._job_id, mol_db,
+                        decoy_sample_size=20, target_adducts=target_adducts, db=self._db)
+        self._fdr.decoy_adduct_selection()
+
+        search_alg = MSMBasicSearch(self._sc, self._ds, self._ds_reader, mol_db, self._fdr, self._ds.config)
+        return search_alg.search()
+
     def _run_annotation_job(self, mol_db):
         try:
             self.store_job_meta(mol_db.id)
@@ -93,17 +105,7 @@ class SearchJob(object):
             logger.info("Processing ds_id: %s, ds_name: %s, db_name: %s, db_version: %s ...",
                         self._ds.id, self._ds.name, mol_db.name, mol_db.version)
 
-            theor_peaks_gen = TheorPeaksGenerator(self._sc, mol_db, self._ds.config, db=self._db)
-            theor_peaks_gen.run()
-
-            target_adducts = self._ds.config['isotope_generation']['adducts']
-            self._fdr = FDR(self._job_id, mol_db,
-                            decoy_sample_size=20, target_adducts=target_adducts, db=self._db)
-            self._fdr.decoy_adduct_selection()
-
-            search_alg = MSMBasicSearch(self._sc, self._ds, self._ds_reader, mol_db, self._fdr, self._ds.config)
-            ion_metrics_df, ion_iso_images = search_alg.search()
-
+            ion_metrics_df, ion_iso_images = self._search(mol_db)
             mz_img_store = ImageStoreServiceWrapper(self._sm_config['services']['iso_images'])
             search_results = SearchResults(mol_db.id, self._job_id, search_alg.metrics.keys())
             mask = self._ds_reader.get_2d_sample_area_mask()
@@ -138,6 +140,10 @@ class SearchJob(object):
                     moldb_id_list.append(mol_db_id)
         return moldb_id_list
 
+    def _open_dataset_reader(self, ds):
+        self._ds_reader = DatasetReader(ds.input_path, self._sc, self._wd_manager)
+        self._ds_reader.copy_convert_input_data()
+
     def run(self, ds):
         """ Entry point of the engine. Molecule search is completed in several steps:
             * Copying input data to the engine work dir
@@ -169,8 +175,7 @@ class SearchJob(object):
             if not self.no_clean:
                 self._wd_manager.clean()
 
-            self._ds_reader = DatasetReader(self._ds.input_path, self._sc, self._wd_manager)
-            self._ds_reader.copy_convert_input_data()
+            self._open_dataset_reader(ds)
 
             logger.info('Dataset config:\n%s', pformat(self._ds.config))
 

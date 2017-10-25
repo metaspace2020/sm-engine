@@ -107,6 +107,13 @@ class SMDaemon(object):
             ).format(submitter.get('First_Name', ''), submitter.get('Surname', ''), ds_name)
             self._send_email(submitter['Email'], 'METASPACE service notification (FAILED)', email_body)
 
+    def _search_job_factory(self):
+        if 'search_job' in self._sm_config.get('mocks', []):
+            from sm.engine.tests.util import MockSearchJob
+            return MockSearchJob
+        else:
+            return SearchJob
+
     def _callback(self, msg):
         log_msg = " SM daemon received a message: {}".format(msg)
         logger.info(log_msg)
@@ -118,7 +125,7 @@ class SMDaemon(object):
                                          queue_publisher=QueuePublisher(self._sm_config['rabbitmq']))
             ds_man.process(ds=Dataset.load(db, msg['ds_id']),
                            action=msg['action'],
-                           search_job_factory=SearchJob,
+                           search_job_factory=self._search_job_factory(),
                            del_first=msg.get('del_first', False))
         finally:
             if db:
