@@ -36,16 +36,19 @@ class TheorPeaksGenerator(object):
         self._mol_db = mol_db
         self._isocalc_wrapper = IsocalcWrapper(self._ds_config['isotope_generation'])
 
+    def stored_ions(self):
+        return self._db.select(SF_ADDUCT_SEL,
+          self._isocalc_wrapper.sigma,
+          self._isocalc_wrapper.charge,
+          self._isocalc_wrapper.pts_per_mz)
+
     def run(self):
         """ Starts peaks generation. Checks all formula peaks saved in the database and
         generates peaks only for new ones"""
         logger.info('Running theoretical peaks generation')
 
         sf_list = self._mol_db.sfs.values()
-        stored_sf_adduct = self._db.select(SF_ADDUCT_SEL,
-                                           self._isocalc_wrapper.sigma,
-                                           self._isocalc_wrapper.charge,
-                                           self._isocalc_wrapper.pts_per_mz)
+        stored_sf_adduct = self.stored_ions()
 
         sf_adduct_cand = self.find_sf_adduct_cand(sf_list, set(stored_sf_adduct))
         logger.info('%d saved (sf, adduct)s, %s not saved (sf, adduct)s', len(stored_sf_adduct), len(sf_adduct_cand))

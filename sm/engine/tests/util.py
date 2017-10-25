@@ -12,9 +12,11 @@ import numpy as np
 import scipy.sparse as sp
 from logging.config import dictConfig
 from unittest.mock import MagicMock
+from collections import OrderedDict
 
 from sm.engine.db import DB
 from sm.engine.dataset_reader import DatasetReader
+from sm.engine.search_algorithm import SearchAlgorithm
 from sm.engine.search_job import SearchJob
 from sm.engine.mol_db import MolecularDB
 from sm.engine.theor_peaks_gen import TheorPeaksGenerator
@@ -135,9 +137,9 @@ def mol_db(sm_config, ds_config):
 class MockDatasetReader(DatasetReader):
     def __init__(self):
         self.max_y = 80
-        self.min_y = 0
+        self.min_y = 1
         self.max_x = 120
-        self.min_x = 0
+        self.min_x = 1
         self._norm_img_pixel_inds = np.arange(80 * 120)
 
     def copy_convert_input_data(self):
@@ -151,7 +153,21 @@ class MockSearchJob(SearchJob):
     def _open_dataset_reader(self, ds):
         self._ds_reader = MockDatasetReader()
 
-    def _search(self, mol_db):
+    def _search_alg(self, mol_db):
+        return MockSearchAlgorithm(mol_db, self._ds, self._ds_reader, self._db)
+
+class MockSearchAlgorithm(SearchAlgorithm):
+    def __init__(self, mol_db, ds, ds_reader, db):
+        self._mol_db = mol_db
+        self._ds = ds
+        self._ds_reader = ds_reader
+        self._db = db
+        self.metrics = OrderedDict([('chaos', 0), ('spatial', 0), ('spectral', 0),
+                                    ('total_iso_ints', [0, 0, 0, 0]),
+                                    ('min_iso_ints', [0, 0, 0, 0]),
+                                    ('max_iso_ints', [0, 0, 0, 0])])
+
+    def search(self):
         N = np.random.randint(15, 25)
         df = pd.DataFrame(dict(
             chaos=np.random.uniform(0.9, 1.0, N),
@@ -165,12 +181,14 @@ class MockSearchJob(SearchJob):
         df['max_iso_ints'] = [[1000, 800, 500, 100] for _ in range(N)]
 
         target_adducts = self._ds.config['isotope_generation']['adducts']
-        df['sf_id'] = np.random.choice(list(mol_db.sfs.keys()), N)
+        mol_db = self._mol_db
+        df['sf_id'] = np.random.choice(list(mol_db.sfs.keys()), N, replace=False)
         df['adduct'] = np.random.choice(target_adducts, N)
 
         # generate the peaks so that ElasticSearch export can work
-        theor_peaks_gen = TheorPeaksGenerator(self._sc, mol_db, self._ds.config, db=self._db)
-        theor_peaks_input = list(zip((mol_db.sfs[id] for id in df.sf_id), df.adduct))
+        theor_peaks_gen = TheorPeaksGenerator(None, mol_db, self._ds.config, db=self._db)
+        theor_peaks_input = set(zip((mol_db.sfs[id] for id in df.sf_id), df.adduct))
+        theor_peaks_input = list(theor_peaks_input - set(theor_peaks_gen.stored_ions()))
         theor_peaks_gen.generate_theor_peaks(theor_peaks_input)
 
         # generate ion images to be saved (with 1 on the main diagonal and 0 elsewhere)

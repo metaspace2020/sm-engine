@@ -85,7 +85,7 @@ class SearchJob(object):
     def clean_target_decoy_table(self):
         self._db.alter(TARGET_DECOY_ADD_DEL, self._ds.id)
 
-    def _search(self, mol_db):
+    def _search_alg(self, mol_db):
         theor_peaks_gen = TheorPeaksGenerator(self._sc, mol_db, self._ds.config, db=self._db)
         theor_peaks_gen.run()
 
@@ -94,8 +94,7 @@ class SearchJob(object):
                         decoy_sample_size=20, target_adducts=target_adducts, db=self._db)
         self._fdr.decoy_adduct_selection()
 
-        search_alg = MSMBasicSearch(self._sc, self._ds, self._ds_reader, mol_db, self._fdr, self._ds.config)
-        return search_alg.search()
+        return MSMBasicSearch(self._sc, self._ds, self._ds_reader, mol_db, self._fdr, self._ds.config)
 
     def _run_annotation_job(self, mol_db):
         try:
@@ -105,7 +104,8 @@ class SearchJob(object):
             logger.info("Processing ds_id: %s, ds_name: %s, db_name: %s, db_version: %s ...",
                         self._ds.id, self._ds.name, mol_db.name, mol_db.version)
 
-            ion_metrics_df, ion_iso_images = self._search(mol_db)
+            search_alg = self._search_alg(mol_db)
+            ion_metrics_df, ion_iso_images = search_alg.search()
             mz_img_store = ImageStoreServiceWrapper(self._sm_config['services']['iso_images'])
             search_results = SearchResults(mol_db.id, self._job_id, search_alg.metrics.keys())
             mask = self._ds_reader.get_2d_sample_area_mask()
