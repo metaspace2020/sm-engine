@@ -25,7 +25,7 @@ def test_index_ds_works(es_dsl_search, sm_index, sm_config):
     def db_sel_side_effect(*args):
         if args == (DATASET_SEL, ds_id):
             # ('ds_id', 'ds_name', 'ds_config', 'ds_meta', 'ds_input_path', 'ds_status', 'ds_last_finished')
-            return [(ds_id, 'ds_name', 'ds_config', {}, 'ds_input_path', upload_dt, 'ds_status',
+            return [(ds_id, 'ds_name', 'ds_config', {}, {}, 'ds_input_path', upload_dt, 'ds_status',
                      datetime.strptime(last_finished, '%Y-%m-%dT%H:%M:%S'))]
         elif args == (ANNOTATIONS_SEL, ds_id, mol_db_id):
             # "sf", "sf_adduct",
@@ -81,7 +81,8 @@ def test_index_ds_works(es_dsl_search, sm_index, sm_config):
         'ds_upload_dt': upload_dt,
         'annotation_counts': [{'db': {'name': 'db_name', 'version': '2017'},
                                'counts': [{'level': 5, 'n': 1}, {'level': 10, 'n': 2},
-                                          {'level': 20, 'n': 2}, {'level': 50, 'n': 2}]}]
+                                          {'level': 20, 'n': 2}, {'level': 50, 'n': 2}]}],
+        'ds_acq_geometry': {}
     }
 
 

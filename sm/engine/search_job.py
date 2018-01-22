@@ -5,6 +5,7 @@
 .. moduleauthor:: Vitaly Kovalev <intscorpio@gmail.com>
 """
 import time
+from importlib import import_module
 from pprint import pformat
 from datetime import datetime
 from pyspark import SparkContext, SparkConf
@@ -22,7 +23,6 @@ from sm.engine.work_dir import WorkDirManager, local_path
 from sm.engine.es_export import ESExporter
 from sm.engine.mol_db import MolecularDB, MolDBServiceWrapper
 from sm.engine.errors import JobFailedError, ESExportFailedError
-from sm.engine.png_generator import ImageStoreServiceWrapper
 from sm.engine.queue import QueuePublisher
 
 logger = logging.getLogger('sm-engine')
@@ -41,6 +41,7 @@ class SearchJob(object):
     no_clean : bool
         Don't delete interim data files
     """
+
     def __init__(self, img_store=None, no_clean=False):
         self.no_clean = no_clean
         self._img_store = img_store
@@ -56,6 +57,7 @@ class SearchJob(object):
         self._es = None
 
         self._sm_config = SMConfig.get_conf()
+
         logger.debug('Using SM config:\n%s', pformat(self._sm_config))
 
     def _configure_spark(self):
@@ -69,6 +71,7 @@ class SearchJob(object):
             sconf.set("spark.hadoop.fs.s3a.access.key", self._sm_config['aws']['aws_access_key_id'])
             sconf.set("spark.hadoop.fs.s3a.secret.key", self._sm_config['aws']['aws_secret_access_key'])
             sconf.set("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+            sconf.set("spark.hadoop.fs.s3a.endpoint", "s3.{}.amazonaws.com".format(self._sm_config['aws']['aws_region']))
 
         self._sc = SparkContext(master=self._sm_config['spark']['master'], conf=sconf, appName='SM engine')
 
@@ -138,10 +141,21 @@ class SearchJob(object):
                     moldb_id_list.append(mol_db_id)
         return moldb_id_list
 
+    def _save_data_from_raw_ms_file(self):
+        ms_file_type_config = SMConfig.get_ms_file_handler(self._wd_manager.local_dir.ms_file_path)
+        acq_geometry_factory_module = ms_file_type_config['acq_geometry_factory']
+        acq_geometry_factory = getattr(import_module(acq_geometry_factory_module['path']),
+                                                acq_geometry_factory_module['name'])
+
+        acq_geometry = acq_geometry_factory(self._wd_manager.local_dir.ms_file_path).create()
+        self._ds.save_acq_geometry(self._db, acq_geometry)
+
+        self._ds.save_ion_img_storage_type(self._db, ms_file_type_config['img_storage_type'])
+
     def run(self, ds):
         """ Entry point of the engine. Molecule search is completed in several steps:
             * Copying input data to the engine work dir
-            * Conversion input data (imzML+ibd) to plain text format. One line - one spectrum data
+            * Conversion input mass spec files to plain text format. One line - one spectrum data
             * Generation and saving to the database theoretical peaks for all formulas from the molecule database
             * Molecules search. The most compute intensive part. Spark is used to run it in distributed manner.
             * Saving results (isotope images and their metrics of quality for each putative molecule) to the database
@@ -171,6 +185,9 @@ class SearchJob(object):
 
             self._ds_reader = DatasetReader(self._ds.input_path, self._sc, self._wd_manager)
             self._ds_reader.copy_convert_input_data()
+
+            self._save_data_from_raw_ms_file()
+            self._img_store.storage_type = self._ds.get_ion_img_storage_type(self._db)
 
             logger.info('Dataset config:\n%s', pformat(self._ds.config))
 

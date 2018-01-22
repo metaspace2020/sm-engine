@@ -51,11 +51,26 @@ class LocalWorkDir(object):
 
     def __init__(self, base_path, ds_id):
         self.ds_path = join(base_path, ds_id)
+        self._ms_file_path = None
 
     @property
-    def imzml_path(self):
-        imzmls = [fn for fn in listdir(self.ds_path) if re.search(r'\.imzml$', fn, re.IGNORECASE)]
-        return join(self.ds_path, imzmls[0]) if imzmls else ''
+    def ms_file_path(self):
+        if self._ms_file_path:
+            return self._ms_file_path
+
+        file_handlers = SMConfig.get_conf()['ms_file_handlers']
+        for handler in file_handlers:
+            ms_file_extension = handler['extensions'][0]
+            logger.info('"%s" file handler is looking for files with "%s" extension \
+                        in the input directory...',  handler['type'], ms_file_extension)
+            ms_file_path = next((fn for fn in listdir(self.ds_path) \
+                if re.search(r'\.{}$'.format(ms_file_extension), fn, re.IGNORECASE)), None)
+            if ms_file_path:
+                logger.info('"%s" file handler has found "%s" in the input directory...',\
+                            handler['type'], ms_file_path)
+                self._ms_file_path = join(self.ds_path, ms_file_path)
+                break
+        return self._ms_file_path if self._ms_file_path else ''
 
     @property
     def txt_path(self):
@@ -177,7 +192,7 @@ class WorkDirManager(object):
             return s3_path(path)
 
     def copy_input_data(self, input_data_path):
-        """ Copy imzML/ibd files from input path to a dataset work directory
+        """ Copy mass spec files from input path to a dataset work directory
 
         Args
         ----

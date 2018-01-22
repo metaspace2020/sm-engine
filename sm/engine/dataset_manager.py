@@ -11,6 +11,7 @@ from sm.engine.png_generator import ImageStoreServiceWrapper
 from sm.engine.queue import SM_ANNOTATE, SM_DS_STATUS
 from sm.engine.util import SMConfig
 from sm.engine.work_dir import WorkDirManager
+from sm.engine.ims_geometry_factory import ImsGeometryFactory
 
 SEL_DATASET_OPTICAL_IMAGE = 'SELECT optical_image from dataset WHERE id = %s'
 UPD_DATASET_OPTICAL_IMAGE = 'update dataset set optical_image = %s, transform = %s WHERE id = %s'
@@ -147,11 +148,16 @@ class SMDaemonDatasetManager(DatasetManager):
     def _del_iso_images(self, ds):
         self.logger.info('Deleting isotopic images: (%s, %s)', ds.id, ds.name)
 
-        for row in self._db.select(IMG_URLS_BY_ID_SEL, ds.id):
-            iso_image_ids = row[0]
-            for img_id in iso_image_ids:
-                if img_id:
-                    self._img_store.delete_image_by_id('iso_image', img_id)
+        prev_storage_type = self._img_store.storage_type
+        self._img_store.storage_type = ds.get_ion_img_storage_type(self._db)
+        try:
+            for row in self._db.select(IMG_URLS_BY_ID_SEL, ds.id):
+                iso_image_ids = row[0]
+                for img_id in iso_image_ids:
+                    if img_id:
+                        self._img_store.delete_image_by_id('iso_image', img_id)
+        finally:
+            self._img_store.storage_type = prev_storage_type
 
     def delete(self, ds, del_raw_data=False, **kwargs):
         """ Delete all dataset related data from the DB """
@@ -175,13 +181,13 @@ class SMapiDatasetManager(DatasetManager):
                                 queue_publisher=queue_publisher, logger_name='sm-api')
 
     def _post_sm_msg(self, ds, action, priority=DatasetActionPriority.DEFAULT, **kwargs):
+        ds.set_status(self._db, self._es, self._queue, DatasetStatus.QUEUED)
         if self.mode == 'queue':
             msg = ds.to_queue_message()
             msg['action'] = action
             msg.update(kwargs)
             self._queue.publish(msg, self.qname, priority)
             self.logger.info('New message posted to %s: %s', self._queue, msg)
-        ds.set_status(self._db, self._es, self._queue, DatasetStatus.QUEUED)
 
     def add(self, ds, del_first=False, priority=DatasetActionPriority.DEFAULT):
         """ Send add message to the queue. If dataset exists, raise an exception """
@@ -208,9 +214,15 @@ class SMapiDatasetManager(DatasetManager):
         else:
             self.logger.info('Nothing to update: %s %s', ds.id, ds.name)
 
-    def _annotation_image_shape(self, img_store, ds_id):
-        ion_img_id = self._db.select(IMG_URLS_BY_ID_SEL + ' LIMIT 1', ds_id)[0][0][0]
-        return img_store.get_image_by_id('iso_image', ion_img_id).size
+    def _annotation_image_shape(self, img_store, ds):
+        ion_img_id = self._db.select(IMG_URLS_BY_ID_SEL + ' LIMIT 1', ds.id)[0][0][0]
+        prev_storage_type = img_store.storage_type
+        img_store.storage_type = ds.get_ion_img_storage_type(self._db)
+        try:
+            result = img_store.get_image_by_id('iso_image', ion_img_id).size
+        finally:
+            img_store.storage_type = prev_storage_type
+        return result
 
     def _transform_scan(self, scan, transform_, dims, zoom):
         # zoom is relative to the web application viewport size and not to the ion image dimensions,
@@ -246,7 +258,7 @@ class SMapiDatasetManager(DatasetManager):
         self._db.alter(UPD_DATASET_OPTICAL_IMAGE, img_id, transform, ds.id)
 
     def _add_zoom_optical_images(self, ds, optical_scan, transform, zoom_levels):
-        dims = self._annotation_image_shape(self._img_store, ds.id)
+        dims = self._annotation_image_shape(self._img_store, ds)
         rows = []
         for zoom in zoom_levels:
             img = self._transform_scan(optical_scan, transform, dims, zoom)
