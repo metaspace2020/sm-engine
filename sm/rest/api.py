@@ -119,6 +119,11 @@ def add_optical_image(ds_man, ds, params):
     image = Image.open(requests.get(params['url'], stream=True).raw)
     ds_man.add_optical_image(ds, image, params['transform'])
 
+@post('/v1/datasets/<ds_id>/del-optical-image')
+@sm_modify_dataset('DEL_OPTICAL_IMAGE')
+def del_opt_image(ds_man, ds):
+    ds_man.del_optical_image(ds)
+
 if __name__ == '__main__':
     init_logger()
     logger = logging.getLogger(name='sm-api')
