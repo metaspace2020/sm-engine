@@ -105,6 +105,9 @@ class DatasetManager(object):
     def add_optical_image(self, ds, url, transform, **kwargs):
         raise NotImplemented
 
+    def del_optical_image(self, ds):
+        raise NotImplemented
+
     def _img_store(self):
         return ImageStoreServiceWrapper(self._sm_config['services']['img_service_url'])
 

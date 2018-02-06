@@ -45,6 +45,7 @@ def _json_params(req):
     return json.loads(b.decode('utf-8'))
 
 
+
 def _create_queue_publisher():
     config = _read_config()
     return QueuePublisher(config['rabbitmq'])
