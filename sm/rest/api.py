@@ -86,7 +86,8 @@ def sm_modify_dataset(request_name):
                 db = _create_db_conn()
                 ds = Dataset.load(db=db, ds_id=ds_id)
                 ds_man = _create_dataset_manager(db)
-
+                logger.info('db:%s, ds: %s, ds_man: %s', db, ds, ds_man)
+                logger.info('handler: %s', handler)
                 handler(ds_man, ds, params)
 
                 db.close()
@@ -121,9 +122,9 @@ def add_optical_image(ds_man, ds, params):
     ds_man.add_optical_image(ds, image, params['transform'])
 
 @post('/v1/datasets/<ds_id>/del-optical-image')
-@sm_modify_dataset('DEL_OPTICAL_IMAGE')
-def del_optical_image(ds_man, ds):
-    ds_man.del_optical_image(ds)
+@sm_modify_dataset('DEL_RAW_OPTICAL_IMAGE')
+def del_raw_optical_image(ds_man, ds, params):
+    ds_man.del_raw_optical_image(ds)
 
 if __name__ == '__main__':
     init_logger()
