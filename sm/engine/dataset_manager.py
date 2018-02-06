@@ -105,7 +105,7 @@ class DatasetManager(object):
     def add_optical_image(self, ds, url, transform, **kwargs):
         raise NotImplemented
 
-    def del_optical_image(self, ds):
+    def del_optical_image(self, ds, **kwargs):
         raise NotImplemented
 
     def _img_store(self):
@@ -274,7 +274,7 @@ class SMapiDatasetManager(DatasetManager):
         self.logger.info('Trying to delete: %s', ds.id)
         self._db.alter(DEL_DATASET_RAW_OPTICAL_IMAGE, ds.id)
 
-    def del_optical_image(self, ds):
+    def del_optical_image(self, ds, **kwargs):
         "Deletes Raw Image from DB"
         self.logger.info('Deleting optical image to "%s" dataset', ds.id)
         self._del_raw_optical_image(ds)
