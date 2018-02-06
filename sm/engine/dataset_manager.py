@@ -15,7 +15,7 @@ from sm.engine.work_dir import WorkDirManager
 SEL_DATASET_OPTICAL_IMAGE = 'SELECT optical_image from dataset WHERE id = %s'
 UPD_DATASET_OPTICAL_IMAGE = 'update dataset set optical_image = %s, transform = %s WHERE id = %s'
 # Added by Renat - to delete from DB raw opt image
-DEL_DATASET_RAW_OPTICAL_IMAGE = 'update dataset set optical_image = NULL WHERE id = %s'
+DEL_DATASET_RAW_OPTICAL_IMAGE = 'update dataset set optical_image = NULL, transform = NULL WHERE id = %s'
 
 IMG_URLS_BY_ID_SEL = ('SELECT iso_image_ids '
                       'FROM iso_image_metrics m '
