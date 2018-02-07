@@ -59,7 +59,6 @@ FROM dataset
 LEFT JOIN optical_image ON optical_image.ds_id = dataset.id
 LEFT JOIN job ON job.ds_id = dataset.id
 WHERE dataset.id = %s AND zoom = 8
-GROUP BY dataset.id, optical_image.id
 '''
 
 DATASET_COLUMNS = ('ds_id', 'ds_name', 'ds_config', 'ds_meta', 'ds_input_path',
