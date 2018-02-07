@@ -53,14 +53,17 @@ DATASET_SEL = '''SELECT
     input_path,
     upload_dt,
     dataset.status,
-    to_char(max(finish), 'YYYY-MM-DD HH24:MI:SS')
-FROM dataset LEFT JOIN job ON job.ds_id = dataset.id
-WHERE dataset.id = %s
+    to_char(max(finish), 'YYYY-MM-DD HH24:MI:SS'),
+    optical_image.id
+FROM dataset 
+LEFT JOIN optical_image ON optical_image.ds_id = dataset.id
+LEFT JOIN job ON job.ds_id = dataset.id
+WHERE dataset.id = %s AND zoom = %s
 GROUP BY dataset.id
 '''
 
 DATASET_COLUMNS = ('ds_id', 'ds_name', 'ds_config', 'ds_meta', 'ds_input_path',
-                   'ds_upload_dt', 'ds_status', 'ds_last_finished')
+                   'ds_upload_dt', 'ds_status', 'ds_last_finished', 'ds_optical_image')
 
 
 def init_es_conn(es_config):
@@ -189,7 +192,7 @@ class ESExporter(object):
             dataset['ds_submitter'] = submitter['First_Name'] + ' ' + submitter['Surname']
 
     def _ds_get_by_id(self, ds_id):
-        dataset = dict(zip(DATASET_COLUMNS, self._db.select(DATASET_SEL, ds_id)[0]))
+        dataset = dict(zip(DATASET_COLUMNS, self._db.select(DATASET_SEL, ds_id, zoom = 8)[0]))
         self._ds_add_derived_fields(dataset)
         return dataset
 
