@@ -56,12 +56,10 @@ DATASET_SEL = '''SELECT
     to_char(max(finish), 'YYYY-MM-DD HH24:MI:SS'),
 FROM dataset LEFT JOIN job ON job.ds_id = dataset.id
 WHERE dataset.id = %s
-GROUP BY dataset.id
-'''
+GROUP BY dataset.id'''
 
 DATASET_COLUMNS = ('ds_id', 'ds_name', 'ds_config', 'ds_meta', 'ds_input_path',
                    'ds_upload_dt', 'ds_status', 'ds_last_finished')
-
 
 def init_es_conn(es_config):
     hosts = [{"host": es_config['host'], "port": int(es_config['port'])}]
