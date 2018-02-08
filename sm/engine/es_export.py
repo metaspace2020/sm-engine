@@ -54,16 +54,13 @@ DATASET_SEL = '''SELECT
     upload_dt,
     dataset.status,
     to_char(max(finish), 'YYYY-MM-DD HH24:MI:SS'),
-    optical_image.id
-FROM dataset 
-LEFT JOIN optical_image ON optical_image.ds_id = dataset.id
-LEFT JOIN job ON job.ds_id = dataset.id
-WHERE dataset.id = %s AND zoom = 8
-GROUP BY dataset.id, optical_image.id
+FROM dataset LEFT JOIN job ON job.ds_id = dataset.id
+WHERE dataset.id = %s
+GROUP BY dataset.id
 '''
 
 DATASET_COLUMNS = ('ds_id', 'ds_name', 'ds_config', 'ds_meta', 'ds_input_path',
-                   'ds_upload_dt', 'ds_status', 'ds_last_finished', 'ds_optical_image')
+                   'ds_upload_dt', 'ds_status', 'ds_last_finished')
 
 
 def init_es_conn(es_config):
