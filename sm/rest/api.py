@@ -122,9 +122,9 @@ def add_optical_image(ds_man, ds, params):
     ds_man.add_optical_image(ds, image, params['transform'])
 
 @post('/v1/datasets/<ds_id>/del-optical-image')
-@sm_modify_dataset('DEL_RAW_OPTICAL_IMAGE')
-def del_raw_optical_image(ds_man, ds, params):
-    ds_man.del_raw_optical_image(ds)
+@sm_modify_dataset('DEL_OPTICAL_IMAGE')
+def del_optical_image(ds_man, ds, params):
+    ds_man.del_optical_image(ds)
 
 if __name__ == '__main__':
     init_logger()
