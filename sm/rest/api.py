@@ -45,7 +45,6 @@ def _json_params(req):
     return json.loads(b.decode('utf-8'))
 
 
-
 def _create_queue_publisher():
     config = _read_config()
     return QueuePublisher(config['rabbitmq'])
@@ -86,8 +85,6 @@ def sm_modify_dataset(request_name):
                 db = _create_db_conn()
                 ds = Dataset.load(db=db, ds_id=ds_id)
                 ds_man = _create_dataset_manager(db)
-                # logger.info('db:%s, ds: %s, ds_man: %s', db, ds, ds_man)
-                # logger.info('handler: %s', handler)
                 handler(ds_man, ds, params)
 
                 db.close()
