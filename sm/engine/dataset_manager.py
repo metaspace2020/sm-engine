@@ -12,7 +12,7 @@ from sm.engine.queue import SM_ANNOTATE, SM_DS_STATUS
 from sm.engine.util import SMConfig
 from sm.engine.work_dir import WorkDirManager
 
-SEL_DATASET_OPTICAL_IMAGE = 'SELECT optical_image from dataset WHERE id = %s'
+SEL_DATASET_RAW_OPTICAL_IMAGE = 'SELECT optical_image from dataset WHERE id = %s'
 UPD_DATASET_OPTICAL_IMAGE = 'update dataset set optical_image = %s, transform = %s WHERE id = %s'
 DEL_DATASET_RAW_OPTICAL_IMAGE = 'update dataset set optical_image = NULL, transform = NULL WHERE id = %s'
 
@@ -242,7 +242,7 @@ class SMapiDatasetManager(DatasetManager):
         return buf
 
     def _add_raw_optical_image(self, ds, optical_scan, transform, init_id):
-        row = self._db.select_one(SEL_DATASET_OPTICAL_IMAGE, ds.id)
+        row = self._db.select_one(SEL_DATASET_RAW_OPTICAL_IMAGE, ds.id)
         if row and row[0]:
             self._img_store.delete_image_by_id('raw_optical_image', row[0])
         buf = self._save_jpeg(optical_scan)
@@ -271,8 +271,12 @@ class SMapiDatasetManager(DatasetManager):
         self._add_zoom_optical_images(ds, optical_scan, transform, zoom_levels)
 
     def del_optical_image(self, ds, **kwargs):
-        """Deletes raw optical image from DB"""
+        """ Deletes raw and zoomed optical images from DB and FS"""
         self.logger.info('Deleting optical image to "%s" dataset', ds.id)
+        raw_img_id = self._db.select_one(SEL_DATASET_RAW_OPTICAL_IMAGE, ds.id)
+        self._img_store.delete_image_by_id('raw_optical_image', raw_img_id[0])
+        for row in self._db.select(SEL_OPTICAL_IMAGE, ds.id):
+            self._img_store.delete_image_by_id('optical_image', row[0])
         self._db.alter(DEL_DATASET_RAW_OPTICAL_IMAGE, ds.id)
         self._db.alter(DEL_OPTICAL_IMAGE, ds.id)
 
