@@ -243,12 +243,9 @@ class SMapiDatasetManager(DatasetManager):
 
     def _add_raw_optical_image(self, ds, optical_scan, transform, init_id):
         row = self._db.select_one(SEL_DATASET_RAW_OPTICAL_IMAGE, ds.id)
-        if row and row[0]:
+        if (row[0] != None) and (row[0] != init_id):
             self._img_store.delete_image_by_id('raw_optical_image', row[0])
-        buf = self._save_jpeg(optical_scan)
-        img_id = self._img_store.post_image('raw_optical_image', buf)
-        self._db.alter(UPD_DATASET_OPTICAL_IMAGE, img_id, transform, ds.id)
-        self._img_store.delete_image_by_id('raw_optical_image', init_id)
+        self._db.alter(UPD_DATASET_OPTICAL_IMAGE, init_id, transform, ds.id)
 
     def _add_zoom_optical_images(self, ds, optical_scan, transform, zoom_levels):
         dims = self._annotation_image_shape(self._img_store, ds.id)
