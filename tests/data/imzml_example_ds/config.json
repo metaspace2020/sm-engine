@@ -1,7 +1,6 @@
 {
   "databases": [{
-    "name": "HMDB",
-    "version": "2017-01"
+    "name": "HMDB"
     }
   ],
   "isotope_generation": {

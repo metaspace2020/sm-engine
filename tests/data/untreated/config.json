@@ -7,7 +7,7 @@
     }, 
     "isotope_generation": {
         "adducts": [
-            "+H", 
+            "+H",
             "+K", 
             "+Na"
         ], 
@@ -19,7 +19,6 @@
         "isocalc_pts_per_mz": 8078
     }, 
     "databases": [{
-        "name": "HMDB",
-        "version": "2016"
+        "name": "HMDB-v2.5"
     }]
 }
