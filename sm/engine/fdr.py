@@ -16,7 +16,8 @@ class FDR(object):
         self.db = db
         self.target_adducts = target_adducts
         self.td_df = None
-        self.fdr_levels = [0.05, 0.1, 0.2, 0.5]
+        # self.fdr_levels = [0.05, 0.1, 0.2, 0.5]
+        self.fdr_levels = np.arange(1, 50) / 100
         self.random_seed = 42
 
     def _decoy_adduct_gen(self, target_ions, decoy_adducts_cand):
