@@ -123,17 +123,19 @@ class SearchJob(object):
             msg = 'Job failed(ds_id={}, mol_db={}): {}'.format(self._ds.id, mol_db, str(e))
             raise JobFailedError(msg) from e
         else:
-            self._export_search_results_to_es(mol_db, isocalc)
-
-    def _export_search_results_to_es(self, mol_db, isocalc):
-        try:
-            self._es.index_ds(self._ds.id, mol_db, isocalc)
-        except Exception as e:
-            self._db.alter(JOB_UPD, params=('FAILED', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self._job_id))
-            msg = 'Export to ES failed(ds_id={}, mol_db={}): {}'.format(self._ds.id, mol_db, str(e))
-            raise ESExportFailedError(msg) from e
-        else:
             self._db.alter(JOB_UPD, params=('FINISHED', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self._job_id))
+
+    #         self._export_search_results_to_es(mol_db, isocalc)
+    #
+    # def _export_search_results_to_es(self, mol_db, isocalc):
+    #     try:
+    #         self._es.index_ds(self._ds.id, mol_db, isocalc)
+    #     except Exception as e:
+    #         self._db.alter(JOB_UPD, params=('FAILED', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self._job_id))
+    #         msg = 'Export to ES failed(ds_id={}, mol_db={}): {}'.format(self._ds.id, mol_db, str(e))
+    #         raise ESExportFailedError(msg) from e
+    #     else:
+    #         self._db.alter(JOB_UPD, params=('FINISHED', datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self._job_id))
 
     def _remove_annotation_job(self, mol_db):
         logger.info("Removing job results ds_id: %s, ds_name: %s, db_name: %s, db_version: %s",
@@ -173,6 +175,7 @@ class SearchJob(object):
             ds : sm.engine.dataset_manager.Dataset
         """
         try:
+            logger.info('*' * 150)
             start = time.time()
 
             self._init_db()

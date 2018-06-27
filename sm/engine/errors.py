@@ -24,3 +24,8 @@ class DSIDExists(SMError):
     def __init__(self, ds_id):
         super().__init__('Dataset already exists: {}'.format(ds_id))
 
+
+class DSIsBusy(SMError):
+
+    def __init__(self, ds_id):
+        super().__init__(f"Dataset is being processed: {ds_id}")
