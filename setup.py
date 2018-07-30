@@ -14,7 +14,7 @@ setup(name='sm',
           "cpyImagingMSpec==0.2.4",
           "pyMSpec==0.1.2",
           "cpyMSpec==0.3.5",  # Drop all isotopic patterns if updated!
-          "pyimzML==1.2.2"
+          "pyimzML==1.2.3"
       ],
       dependency_links=[
           "http://github.com/alexandrovteam/pyimzML/tarball/1.2.2#egg=pyimzML-1.2.2"
